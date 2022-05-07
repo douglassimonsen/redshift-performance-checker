@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: An environment to test the upload library
+Resources: 
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+  IGW:
+    Type: AWS::EC2::InternetGateway
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref VPC
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  ExternalRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+      RouteTableId: !Ref RouteTable
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !GetAtt VPC.CidrBlock
+      VpcId: !Ref VPC
+  SubnetRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: A security group for the Redshift Cluster
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: -1
+          ToPort: -1
+          IpProtocol: -1
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 5439
+          ToPort: 5439
+          IpProtocol: -1
+  Store:
+    Type: AWS::S3::Bucket
+  ClusterSubnetGroup:
+    Type: AWS::Redshift::ClusterSubnetGroup
+    Properties:
+      Description: Idk what this is for tbh
+      SubnetIds: 
+        - !Ref Subnet
+  Cluster:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      ClusterType: single-node
+      DBName: test
+      MasterUsername: admin
+      MasterUserPassword: Password1
+      PubliclyAccessible: true
+      NodeType: dc2.large
+      ClusterSubnetGroupName: !Ref ClusterSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref SecurityGroup
+  S3BucketAccessGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      Policies: [{
+        "PolicyName": "S3BucketAccess",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "ObjectPermissions",
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": [
+                !Sub "arn:aws:s3:::${Store}/*",
+              ]
+            },
+            {
+              "Sid": "BucketPermissions",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                !Sub "arn:aws:s3:::${Store}"
+              ]
+            }
+          ]
+        }
+      }]
+  User1:
+    Type: AWS::IAM::User
+    Properties:
+      Groups: 
+        - !Ref S3BucketAccessGroup
+  User2:
+    Type: AWS::IAM::User
+    Properties:
+      Groups: 
+        - !Ref S3BucketAccessGroup
