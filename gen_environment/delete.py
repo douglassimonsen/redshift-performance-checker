@@ -10,3 +10,7 @@ def delete_stack(stack: str) -> None:
     for obj in s3.Bucket(bucket).objects.filter():
         s3.Object(bucket, obj.key).delete()
     cloudformation.delete_stack(StackName=stack)
+
+
+if __name__ == '__main__':
+    delete_stack("redshift-test")
